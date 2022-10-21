@@ -36,13 +36,13 @@ def crystalball_func(x, mu, sigma, alpha, n):
 
 
 @z.function(wraps="zfit_tensor", stateless_args=True)
-def double_crystalball_func(x, mu, sigma, alphal, nl, alphar, nr):
+def double_crystalball_func(x, mu, sigmal,sigmar, alphal, nl, alphar, nr):
     cond = tf.less(x, mu)
 
     func = tf.where(
         cond,
-        crystalball_func(x, mu, sigma, alphal, nl),
-        crystalball_func(x, mu, sigma, -alphar, nr),
+        crystalball_func(x, mu, sigmal, alphal, nl),
+        crystalball_func(x, mu, sigmar, -alphar, nr),
     )
 
     return func
@@ -141,7 +141,8 @@ def crystalball_integral_func(mu, sigma, alpha, n, lower, upper):
 
 def double_crystalball_mu_integral(limits, params, model):
     mu = params["mu"]
-    sigma = params["sigma"]
+    sigmar = params['sigmar']
+    sigmal = params['sigmal']
     alphal = params["alphal"]
     nl = params["nl"]
     alphar = params["alphar"]
@@ -153,7 +154,8 @@ def double_crystalball_mu_integral(limits, params, model):
 
     return double_crystalball_mu_integral_func(
         mu=mu,
-        sigma=sigma,
+        sigmal=sigmal,
+        sigmar=sigmar,
         alphal=alphal,
         nl=nl,
         alphar=alphar,
@@ -165,18 +167,18 @@ def double_crystalball_mu_integral(limits, params, model):
 
 @z.function(wraps="zfit_tensor")
 def double_crystalball_mu_integral_func(
-    mu, sigma, alphal, nl, alphar, nr, lower, upper
+    mu, sigmal,sigmar, alphal, nl, alphar, nr, lower, upper
 ):
     # mu_broadcast =
     upper_of_lowerint = znp.minimum(mu, upper)
     integral_left = crystalball_integral_func(
-        mu=mu, sigma=sigma, alpha=alphal, n=nl, lower=lower, upper=upper_of_lowerint
+        mu=mu, sigma=sigmal, alpha=alphal, n=nl, lower=lower, upper=upper_of_lowerint
     )
     left = tf.where(tf.less(mu, lower), znp.zeros_like(integral_left), integral_left)
 
     lower_of_upperint = znp.maximum(mu, lower)
     integral_right = crystalball_integral_func(
-        mu=mu, sigma=sigma, alpha=-alphar, n=nr, lower=lower_of_upperint, upper=upper
+        mu=mu, sigma=sigmar, alpha=-alphar, n=nr, lower=lower_of_upperint, upper=upper
     )
     right = tf.where(
         tf.greater(mu, upper), znp.zeros_like(integral_right), integral_right
@@ -255,7 +257,8 @@ class DoubleCB(BasePDF):
     def __init__(
         self,
         mu: ztyping.ParamTypeInput,
-        sigma: ztyping.ParamTypeInput,
+        sigmal: ztyping.ParamTypeInput,
+        sigmar: ztyping.ParamTypeInput,
         alphal: ztyping.ParamTypeInput,
         nl: ztyping.ParamTypeInput,
         alphar: ztyping.ParamTypeInput,
@@ -269,13 +272,13 @@ class DoubleCB(BasePDF):
         The function is defined as follows:
 
         .. math::
-            f(x;\\mu, \\sigma, \\alpha_{L}, n_{L}, \\alpha_{R}, n_{R}) =  \\begin{cases}
+            f(x;\\mu, \\sigma_{L},\\sigma_{R}, \\alpha_{L}, n_{L}, \\alpha_{R}, n_{R}) =  \\begin{cases}
             A_{L} \\cdot (B_{L} - \\frac{x - \\mu}{\\sigma})^{-n},
-             & \\mbox{for }\\frac{x - \\mu}{\\sigma} < -\\alpha_{L} \\newline
-            \\exp(- \\frac{(x - \\mu)^2}{2 \\sigma^2}),
-            & -\\alpha_{L} \\leqslant \\mbox{for}\\frac{x - \\mu}{\\sigma} \\leqslant \\alpha_{R} \\newline
-            A_{R} \\cdot (B_{R} - \\frac{x - \\mu}{\\sigma})^{-n},
-             & \\mbox{for }\\frac{x - \\mu}{\\sigma} > \\alpha_{R}
+             & \\mbox{for }\\frac{x - \\mu}{\\sigma_{L}} < -\\alpha_{L} \\newline
+            \\exp(- \\frac{(x - \\mu)^2}{2 \\sigma_{L}^2}),
+            & -\\alpha_{L} \\leqslant \\mbox{for}\\frac{x - \\mu}{\\sigma_{R}} \\leqslant \\alpha_{R} \\newline
+            A_{R} \\cdot (B_{R} - \\frac{x - \\mu}{\\sigma_{R}})^{-n},
+             & \\mbox{for }\\frac{x - \\mu}{\\sigma_{R}} > \\alpha_{R}
             \\end{cases}
 
         with
@@ -288,7 +291,8 @@ class DoubleCB(BasePDF):
 
         Args:
             mu: The mean of the gaussian
-            sigma: Standard deviation of the gaussian
+            sigmal: Standard deviation of the left side gaussian
+            sigmar: Standard deviation of the right side gaussian
             alphal: parameter where to switch from a gaussian to the powertail on the left
             side
             nl: Exponent of the powertail on the left side
@@ -301,7 +305,8 @@ class DoubleCB(BasePDF):
         """
         params = {
             "mu": mu,
-            "sigma": sigma,
+            "sigmal": sigmal,
+            "sigmar": sigmar,
             "alphal": alphal,
             "nl": nl,
             "alphar": alphar,
@@ -311,14 +316,15 @@ class DoubleCB(BasePDF):
 
     def _unnormalized_pdf(self, x):
         mu = self.params["mu"]
-        sigma = self.params["sigma"]
+        sigmal = self.params["sigmal"]
+        sigmar = self.params["sigmar"]
         alphal = self.params["alphal"]
         nl = self.params["nl"]
         alphar = self.params["alphar"]
         nr = self.params["nr"]
         x = x.unstack_x()
         return double_crystalball_func(
-            x=x, mu=mu, sigma=sigma, alphal=alphal, nl=nl, alphar=alphar, nr=nr
+            x=x, mu=mu, sigmal=sigmal,sigmar=sigmar, alphal=alphal, nl=nl, alphar=alphar, nr=nr
         )
 
 
